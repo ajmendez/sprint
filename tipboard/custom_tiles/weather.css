@@ -1,0 +1,8 @@
+.weather {
+    padding-top: 0.5em;
+    padding-left: 0;
+}
+
+#forecast_embed {
+    height: 245px;
+}

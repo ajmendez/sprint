@@ -1,0 +1,46 @@
+details:
+    page_title: Mendez
+layout:
+    - row_2_of_3:
+        - col_2_of_4:
+            - tile_template: weather
+              tile_id: weather
+              title: Weather
+              classes:
+
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: Empty Tile
+              classes:
+
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: Calendar
+              classes:
+
+    - row_1_of_3:
+        - col_1_of_4:
+            - tile_template: line_chart
+              tile_id: power_daily
+              title: Power
+              classes:
+
+        - col_1_of_4:
+            - tile_template: power
+              tile_id: power_info
+              title: Power Quick
+              classes:
+
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: Internet
+              classes:
+
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: Cats
+              classes:
