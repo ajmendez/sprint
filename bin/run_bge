@@ -8,6 +8,8 @@ matplotlib.use('agg')
 
 
 import os
+os.chdir(os.path.expanduser('~/tmp/bge/'))
+
 import sys
 import json
 import time
@@ -287,11 +289,23 @@ def main():
     TILE_NAME = 'big_value'
     TILE_KEY = 'debug_power'
     
-    data = getdata()
     
-    update_big(data)
-    update_daily(data)
-    update_hourly(data)
+    now = datetime.now()
+    print('{0:%s} | {0} '.format(now), end='')
+    
+    try:
+        data = getdata()
+    
+        update_big(data)
+        update_daily(data)
+        update_hourly(data)
+        for tag in ['electricity', 'gas']:
+            print('| {0} | {1} '.format(tag, data[tag]['projected']), end='')
+        print('')
+        
+    except Exception as e:
+        print('Failed: {}'.format(e))
+        
     
     
     # data_jsoned = json.dumps(getdata())
