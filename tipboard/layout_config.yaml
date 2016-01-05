@@ -1,7 +1,7 @@
 details:
     page_title: Mendez
 layout:
-    - row_2_of_3:
+    - row_1_of_3:
         - col_2_of_4:
             - tile_template: weather
               tile_id: weather
@@ -19,28 +19,58 @@ layout:
               tile_id: empty
               title: Calendar
               classes:
+    
+    - row_1_of_3:
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: empty
+              classes:
+              
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: empty
+              classes:
 
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: Empty Tile
+              classes:
+
+        - col_1_of_4:
+            - tile_template: empty
+              tile_id: empty
+              title: Calendar
+              classes:
+    
+    
     - row_1_of_3:
         - col_1_of_4:
             - tile_template: line_chart
               tile_id: power_daily
-              title: Power
+              title: Power by Day
+              timeout: 86400
               classes:
 
         - col_1_of_4:
-            - tile_template: power
-              tile_id: power_info
-              title: Power Quick
+            - tile_template: line_chart
+              tile_id: power_hourly
+              title: Power by Hour
+              timeout: 86400
               classes:
 
         - col_1_of_4:
-            - tile_template: empty
-              tile_id: empty
-              title: Internet
+            - tile_template: big_value
+              tile_id: power_electricity
+              title: Electricity
+              timeout: 86400
               classes:
 
         - col_1_of_4:
-            - tile_template: empty
-              tile_id: empty
-              title: Cats
+            - tile_template: big_value
+              tile_id: power_gas
+              title: Gas
+              timeout: 86400
               classes:

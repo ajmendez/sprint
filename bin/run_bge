@@ -1,96 +1,323 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Mendez 2016 Push bge data to tipboard
 
+import matplotlib
+matplotlib.use('agg')
+
+
+
+import os
+import sys
 import json
+import time
+import zipfile
+import splinter
 import requests
+import numpy as np
+import pandas as pd
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
+from matplotlib.dates import date2num
 from subprocess import check_output
 
 
 
 # Get your API_KEY from your settings file ('~/.tipboard/settings-local.py').
-API_HOST, API_KEY = open(os.path.join('~/.limited/tipboard', 'r').strip().split(' ')
-# Change '127.0.0.1:7272' to the address of your Tipboard instance.
+API_HOST, API_KEY = open(os.path.expanduser('~/.limited/tipboard'), 'r').readline().strip().split(' ')
 API_URL = 'http://{}/api/v0.1/{}'.format(API_HOST, API_KEY)
 API_URL_PUSH = '/'.join((API_URL, 'push'))
 API_URL_TILECONFIG = '/'.join((API_URL, 'tileconfig'))
 
 
 #### Helper functions for data transformations (data sources --> tiles).
+USERNAME, PASSWORD = open('/Users/ajmendez/.limited/bge').read().strip().split()
+
+
+def convert(inputstr):
+    if not isinstance(inputstr,str) and np.isnan(inputstr):
+        return 0.0
+    else:
+        return float(inputstr.replace('$',''))
+
+
+def getdata():
+    out = {
+        'gas': {},
+        'electricity': {},
+    }
+    
+    user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36'
+    driver = 'phantomjs'
+    b = splinter.Browser(driver, user_agent=user_agent)
+    
+    # Login
+    b.visit('https://bgesmartenergymanager.com/ei/app/dashboard')
+    b.find_by_id('USER').fill(USERNAME)
+    b.find_by_id('PASSWORD').fill(PASSWORD)
+    b.find_by_id('loginbutton').click()
+    time.sleep(1)
+    
+    # Get Projected values
+    b.visit('https://secure.bge.com/css/Pages/adaptor.aspx?pgcode=3')
+    time.sleep(1)
+    soup = BeautifulSoup(b.find_by_xpath("//div[@class='tab-panels']").first.html, "html.parser")
+    for htmltag in soup.findAll('div', attrs={'class':'meterType'}):
+        tmp = ' '.join(htmltag.text.split())+'\n'
+        tag = 'gas' if ('natural gas' in tmp) else 'electricity'
+        out[tag]['projected'] = htmltag.findAll('div', attrs={'class':'value'})[0].text.strip().replace('therms',' therms')
+        out[tag]['dates'] = htmltag.findAll('dt', attrs={'class':'title'})[0]['data-test-current-range']
+        out[tag]['text'] = tmp
+    
+    # get the data
+    now = datetime.now()
+    delta = timedelta(days=6*31) # six months
+    b.visit('https://bgesmartenergymanager.com/ei/app/myEnergyUse')
+    b.visit(b.find_by_text('Green Button - Download my data')['href'])
+    b.find_by_id('exportDialog-submitButton').click()
+    url = b.find_by_xpath('//form')['action']
+    # exportFormat could be "CSV_AMI_SINGLE_BILL" "CSV_AMI" and others
+    params = dict(exportFormat='CSV_AMI',
+                  csvTo='{0:%m}/{0:%d}/{0:%Y}'.format(now),
+                  csvFrom='{0:%m}/{0:%d}/{0:%Y}'.format(now-delta))
+    resp = requests.get(url, params=params, cookies=b.cookies.all())
+    tmp = resp.headers['Content-disposition'].split(';')[1].split('=')[1]
+    filename = '/Users/ajmendez/tmp/bge/{}'.format(tmp)
+    with open(filename, 'wb') as f:
+        f.write(resp.content)
+    
+    # Convert into points
+    before = date2num(datetime.now() - timedelta(days=16))
+    lastday = date2num(datetime.now() - timedelta(days=1))
+    zf = zipfile.ZipFile(filename)
+    for name in zf.namelist():
+        tag = 'gas' if ('_gas_' in name) else 'electricity'
+        zf.extract(name)
+        df = pd.DataFrame.from_csv(name, header=4, index_col=False, parse_dates=True)
+        df['datetime'] = pd.to_datetime(df['DATE'] +' '+df['START TIME'])
+        datenum = (df['datetime'].values.astype(np.int64)/1e9).astype('uint64')
+        df['datenum'] = date2num([datetime.fromtimestamp(d) for d in datenum])
+        df['hour'] = (df['datenum']%1)*24
+        df['cleancost'] = df['COST'].apply(convert)
+        # df['USAGE'].groupby(df['hour']).apply(np.mean).plot()
+        
+        out[tag]['hourly']     = df['cleancost'].where(df['datenum'] > before).groupby(df['hour']).apply(np.mean)
+        out[tag]['hourly_last']     = df['cleancost'].where(df['datenum'] > lastday).groupby(df['hour'].where(df['datenum'] > lastday)).apply(np.mean)
+        out[tag]['hourly_all'] = df['cleancost'].groupby(df['hour']).apply(np.mean)
+        
+        short = df.where(df['datenum'] > before)
+        out[tag]['daily']      = short['cleancost'].groupby(short['DATE']).apply(np.sum)
+    return out
+    
 
 # We have only one tile here, hence 'prepare_for_pie_chart' is all we need,
 # but in real-life scenario you may want some additional functions like
 # 'prepare_for_line_chart', 'prepare_for_velocity_chart' and so on.
 
-def prepare_for_pie_chart(data):
-    # Pie chart needs data as a list of lists (whose elements are pairs
-    # component-percentage), so we have to prepare it.
-    data_prepared = []
-    for k, v in data.items():
-        data_prepared.append([k, v[0]])
-    data_prepared = {'title': 'my title', 'pie_data': data_prepared}
-    return data_prepared
+# def getdata():
+#     return {
+#         'title': 'Projected Power',
+#         # 'description': 'Dollar amount scraped from website',
+#         'description': 'Last Updated: {}'.format(datetime.now()),
+#         'big-value': '$60',
+#         # 'upper-left-label': 'Last',
+#         # 'upper-left-value': '{}'.format(datetime.now()),
+#     }
+
+# def getvalue():
+#     return {
+#         # 'big_value_color': '#94C140',
+#         'big_value_color': 'None',
+#     }
+
+def _update(url, **kwargs):
+    resp = requests.post(url, **kwargs)
+    if resp.status_code != 200:
+        print(resp.text)
+        print(resp.url)
+        print(kwargs)
+        sys.exit(1)
+
+def _config(tile, key, value):
+    _update('{}/{}'.format(API_URL_TILECONFIG, key), data={'value':json.dumps(value)})
+
+def _data(tile, key, **kwargs):
+    data = {
+        'tile': tile,
+        'key': key,
+        'data':json.dumps(kwargs),
+    }
+    _update(API_URL_PUSH, data=data)
+
+
+def update_big(data):
+    for tag in ['gas', 'electricity']:
+        t = data[tag]
+        tmp = {'title':'Projected {}'.format(tag.capitalize()),
+               # 'description': t['text'],
+               'description': 'Last Updated: {}'.format(datetime.now()),
+               'big-value':t['projected'],
+               'upper-left-label':t['dates']}
+               
+        _data('big_value', 'power_{}'.format(tag), **tmp)
+        
+        if 'tag' == 'electricity':
+            tmp = {'big_value_color': 'red' if (convert(t['projected']) > 50) else 'none'}
+            _config('big_value', 'power_{}'.format(tag), tmp)
+
+
+
+
+
+
+def to_series(t):
+    return [[a,b] for a,b in zip(t.index, t.values)]
+
+def plot_defaults(**kwargs):
+    tmp = {
+        'grid': {"drawGridLines": False,},
+        'seriesDefaults':{'pointLabels': {'show': False}, 
+                          'markerOptions':{'show':False},
+                          'trendline':{'lineWidth':0, 'show':False},
+                          'showMarker': False, 
+                          'fill': True,
+                          'fillAlpha': 0.7,
+                          'lineWidth': 2,},
+    
+        'axes': {
+            # 'xaxis':{'min': 0},
+            'xaxis':{},
+            'yaxis':{'min': 0, 
+    #                  'labelRenderer': '$.jqplot.CanvasAxisLabelRenderer', 
+                     'tickOptions':{'showLabel':True}},
+        },
+    }
+    tmp.update(kwargs)
+    return tmp
+    
+
+def update_daily(data):
+    series = []
+    for tag in ['electricity', 'gas']:
+        t = data[tag]['daily']
+        series.append(to_series(t))
+    tmp = {
+        'subtitle': 'Average Daily Usage',
+        'description': 'Last Updated: {}'.format(datetime.now()),
+        'series_list': series,
+    }
+    _data('line_chart', 'power_daily', **tmp)
+    
+    value = plot_defaults(
+        series=[{'label':'Electricity', 'color':'rgba(255,0,0,0.8)'},
+                {'label':'Gas', 'color':'rgba(255,255,255,0.8)'},],
+    )
+    value['axes']['yaxis']['label'] = 'Daily Cost'
+    # value['axes']['yaxis']['max'] = 4
+    value['axes']['xaxis']['numberTicks'] = 8
+    # value['axes']['xaxis']['min'] = t.idxmin()
+    # value['axes']['xaxis']['max'] = t.idxmax()
+    # value['axes']['xaxis']['tickInterval'] = '2 days'
+    _config('line_chart', 'power_daily', value=value)
+
+
+
+def update_hourly(data):
+    series = []
+    for group in ['hourly', 'hourly_all', 'hourly_last']:
+        for tag in ['electricity', 'gas']:
+            t = data[tag][group]
+            series.append(to_series(t))
+            
+    tmp = {
+        'subtitle': 'Average Hourly Usage',
+        'description': 'Last Updated: {}'.format(datetime.now()),
+        'series_list': series,
+    }
+    _data('line_chart', 'power_hourly', **tmp)
+    
+    value = plot_defaults(
+        series=[{'label':'Electricity', 'color':'rgba(255,0,0,0.8)'},
+                {'label':'Gas', 'color':'rgba(255,255,255,0.8)'},
+                #
+                {'label':'Electricity All', 'color':'rgba(255,0,0,0.2)', 'fill': False, 'lineWidth': 2},
+                {'label':'Gas All', 'color':'rgba(255,255,255,0.2)', 'fill': False, 'lineWidth': 2},
+                #
+                {'label':'Electricity LastDay', 'color':'rgba(255,0,0,0.2)', 'fill': False, 'lineWidth': 0, 'markerOptions':{'show':True},},
+                {'label':'Gas LastDay', 'color':'rgba(255,255,255,0.2)', 'fill': False, 'lineWidth': 0, 'markerOptions':{'show':True},},
+                
+            ],
+    )
+    value['axes']['yaxis']['label'] = 'Mean Cost'
+    # value['axes']['yaxis']['max'] = 0.25
+    # value['axes']['xaxis']['min'] = 0
+    # value['axes']['xaxis']['max'] = 24
+    # value['axes']['xaxis']['numberTicks'] = 8
+    # value['axes']['xaxis']['tickOptions'] = { 'formatString': '%#d' }
+    
+    
+    _config('line_chart', 'power_hourly', value=value)
+    # tmp = {
+    #     'grid': {"drawGridLines": False,},
+    #     'Trendline':{'show':False},
+    #     'seriesDefaults':{ 'pointLabels': {'show': False}, 'lineWidth': 2,},
+    #     'series': [
+    #         {'color': 'rgba(25,255,25,.2)', 'markerOptions': { 'style':"circle" }},
+    #         {'color': 'rgba(255,255,255,.2)', 'markerOptions': { 'style':"filledSquare", 'size':10 }},
+    #         {'color': 'rgba(25,255,25,.6)', 'markerOptions': { 'style':"circle" }},
+    #         {'color': 'rgba(255,255,255,.6)', 'markerOptions': { 'style':"filledSquare", 'size':10 }},
+    #         # {'lineWidth':1, 'markerOptions': { 'style':"circle" }},
+    #         # {'lineWidth':1, 'markerOptions': { 'style':"filledSquare", 'size':10 }},
+    #         # {'lineWidth':4, 'markerOptions': { 'style':"circle" }},
+    #         # {'lineWidth':4, 'markerOptions': { 'style':"filledSquare", 'size':10 }},
+    #     ]
+    # }
+    # _config('line_chart', 'power_hourly', value=tmp)
+    
+
+    
+        
+
+
 
 
 #### Putting it all together.
 
 def main():
-    # Tile 'pie001' (pie chart)
-    # (let's say we want to show issues count for project 'Tipboard' grouped by
-    # issue status i.e. 'Resolved', 'In Progress', 'Open', 'Closed' etc.)
-    TILE_NAME = 'pie_chart'
-    TILE_KEY = 'pie001'
-    # Now we are launching our script asking data source for the stuff we want:
-    # (see its documentation for available options/switches)
-    ds_output = check_output(["python", "jira-ds.py", "--project=Tipboard",
-                              "--issues-counts"])
-    data = json.loads(ds_output)
-    data_selected = data.get('status_summary')
-    data_prepared = prepare_for_pie_chart(data_selected)
-    data_jsoned = json.dumps(data_prepared)
-    data_to_push = {
-        'tile': TILE_NAME,
-        'key': TILE_KEY,
-        'data': data_jsoned,
-    }
-    resp = requests.post(API_URL_PUSH, data=data_to_push)
-    if resp.status_code != 200:
-        print(resp.text)
-        return
+    TILE_NAME = 'big_value'
+    TILE_KEY = 'debug_power'
+    
+    data = getdata()
+    
+    update_big(data)
+    update_daily(data)
+    update_hourly(data)
+    
+    
+    # data_jsoned = json.dumps(getdata())
+    # data_to_push = {
+    #     'tile': TILE_NAME,
+    #     'key': TILE_KEY,
+    #     'data': data_jsoned,
+    # }
+    # resp = requests.post(API_URL_PUSH, data=data_to_push)
+    # if resp.status_code != 200:
+    #     print(resp.text)
+    #     return
+    #
+    #
+    # # Configure
+    # value_jsoned = json.dumps(getvalue())
+    # data_to_push = {
+    #     'value': value_jsoned,
+    # }
+    # resp = requests.post(
+    #     '/'.join((API_URL_TILECONFIG, TILE_KEY)),
+    #     data=data_to_push)
+    # if resp.status_code != 200:
+    #     print(resp.text)
+    #     return
 
-    # (optional) config for our pie chart, which is pushed in a separate request
-    tile_config = {
-        'legend': {
-            'show': True,
-            'location': 's',
-        }
-    }
-    tile_config_jsoned = json.dumps(tile_config)
-    data_to_push = {
-        'value': tile_config_jsoned,
-    }
-    resp = requests.post(
-        '/'.join((API_URL_TILECONFIG, TILE_KEY)),
-        data=data_to_push,
-    )
-    if resp.status_code != 200:
-        print(resp.text)
-        return
-
-
-    # Tile 'pie002'
-    # TILE_NAME = 'pie_chart'
-    # TILE_KEY = 'pie002'
-    # output = check_output(...
-    # ...and the rest in the same manner as in above example, i.e.:
-    #  - query the data source for data
-    #  - select what you want from that data
-    #  - transform selected data according to tile's specs (if needed)
-    #  - push transformed data to API_URL_PUSH
-    #  - push config data for your tile to API_URL_CONFIG (let's say you want
-    #    to override default behavior and show pie chart's legend at
-    #    the bottom of the tile, or change some colors etc.)
-    # That's all!
 
 
 if __name__ == '__main__':
