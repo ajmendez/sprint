@@ -90,7 +90,7 @@ def getdata():
     
     # Convert into points
     before = date2num(datetime.now() - timedelta(days=16))
-    lastday = date2num(datetime.now() - timedelta(days=1))
+    lastday = date2num(datetime.now() - timedelta(days=2))
     zf = zipfile.ZipFile(filename)
     for name in zf.namelist():
         tag = 'gas' if ('_gas_' in name) else 'electricity'
@@ -103,9 +103,9 @@ def getdata():
         df['cleancost'] = df['COST'].apply(convert)
         # df['USAGE'].groupby(df['hour']).apply(np.mean).plot()
         
-        out[tag]['hourly']     = df['cleancost'].where(df['datenum'] > before).groupby(df['hour']).apply(np.mean)
-        out[tag]['hourly_last']     = df['cleancost'].where(df['datenum'] > lastday).groupby(df['hour'].where(df['datenum'] > lastday)).apply(np.mean)
-        out[tag]['hourly_all'] = df['cleancost'].groupby(df['hour']).apply(np.mean)
+        out[tag]['hourly']      = df['cleancost'].where(df['datenum'] > before).groupby(df['hour']).apply(np.mean)
+        out[tag]['hourly_last'] = df['cleancost'].where(df['datenum'] > lastday).groupby(df['hour'].where(df['datenum'] > lastday)).apply(np.mean)
+        out[tag]['hourly_all']  = df['cleancost'].groupby(df['hour']).apply(np.mean)
         
         short = df.where(df['datenum'] > before)
         out[tag]['daily']      = short['cleancost'].groupby(short['DATE']).apply(np.sum)
@@ -215,7 +215,7 @@ def update_daily(data):
                 {'label':'Gas', 'color':'rgba(255,255,255,0.8)'},],
     )
     value['axes']['yaxis']['label'] = 'Daily Cost'
-    # value['axes']['yaxis']['max'] = 4
+    value['axes']['yaxis']['min'] = 0
     value['axes']['xaxis']['numberTicks'] = 8
     # value['axes']['xaxis']['min'] = t.idxmin()
     # value['axes']['xaxis']['max'] = t.idxmax()
@@ -238,6 +238,7 @@ def update_hourly(data):
     }
     _data('line_chart', 'power_hourly', **tmp)
     
+    tmp = {'show':True, 'shadow':False, 'style':'square', 'size':3}
     value = plot_defaults(
         series=[{'label':'Electricity', 'color':'rgba(255,0,0,0.8)'},
                 {'label':'Gas', 'color':'rgba(255,255,255,0.8)'},
@@ -245,12 +246,13 @@ def update_hourly(data):
                 {'label':'Electricity All', 'color':'rgba(255,0,0,0.2)', 'fill': False, 'lineWidth': 2},
                 {'label':'Gas All', 'color':'rgba(255,255,255,0.2)', 'fill': False, 'lineWidth': 2},
                 #
-                {'label':'Electricity LastDay', 'color':'rgba(255,0,0,0.2)', 'fill': False, 'lineWidth': 0, 'markerOptions':{'show':True},},
-                {'label':'Gas LastDay', 'color':'rgba(255,255,255,0.2)', 'fill': False, 'lineWidth': 0, 'markerOptions':{'show':True},},
+                {'label':'Electricity LastDay', 'color':'rgba(255,0,0,0.9)', 'fill': False, 'lineWidth': 0, 'markerOptions':tmp},
+                {'label':'Gas LastDay', 'color':'rgba(255,255,255,0.9)', 'fill': False, 'lineWidth': 0, 'markerOptions':tmp},
                 
             ],
     )
     value['axes']['yaxis']['label'] = 'Mean Cost'
+    value['axes']['yaxis']['min'] = 0
     # value['axes']['yaxis']['max'] = 0.25
     # value['axes']['xaxis']['min'] = 0
     # value['axes']['xaxis']['max'] = 24
@@ -259,23 +261,6 @@ def update_hourly(data):
     
     
     _config('line_chart', 'power_hourly', value=value)
-    # tmp = {
-    #     'grid': {"drawGridLines": False,},
-    #     'Trendline':{'show':False},
-    #     'seriesDefaults':{ 'pointLabels': {'show': False}, 'lineWidth': 2,},
-    #     'series': [
-    #         {'color': 'rgba(25,255,25,.2)', 'markerOptions': { 'style':"circle" }},
-    #         {'color': 'rgba(255,255,255,.2)', 'markerOptions': { 'style':"filledSquare", 'size':10 }},
-    #         {'color': 'rgba(25,255,25,.6)', 'markerOptions': { 'style':"circle" }},
-    #         {'color': 'rgba(255,255,255,.6)', 'markerOptions': { 'style':"filledSquare", 'size':10 }},
-    #         # {'lineWidth':1, 'markerOptions': { 'style':"circle" }},
-    #         # {'lineWidth':1, 'markerOptions': { 'style':"filledSquare", 'size':10 }},
-    #         # {'lineWidth':4, 'markerOptions': { 'style':"circle" }},
-    #         # {'lineWidth':4, 'markerOptions': { 'style':"filledSquare", 'size':10 }},
-    #     ]
-    # }
-    # _config('line_chart', 'power_hourly', value=tmp)
-    
 
     
         
@@ -300,38 +285,12 @@ def main():
         update_daily(data)
         update_hourly(data)
         for tag in ['electricity', 'gas']:
-            print('| {0} | {1} '.format(tag, data[tag]['projected']), end='')
+            print('| {0} | {1} | {2}'.format(tag, data[tag]['projected'], data[tag]['dates']), end='')
         print('')
         
     except Exception as e:
         print('Failed: {}'.format(e))
         
-    
-    
-    # data_jsoned = json.dumps(getdata())
-    # data_to_push = {
-    #     'tile': TILE_NAME,
-    #     'key': TILE_KEY,
-    #     'data': data_jsoned,
-    # }
-    # resp = requests.post(API_URL_PUSH, data=data_to_push)
-    # if resp.status_code != 200:
-    #     print(resp.text)
-    #     return
-    #
-    #
-    # # Configure
-    # value_jsoned = json.dumps(getvalue())
-    # data_to_push = {
-    #     'value': value_jsoned,
-    # }
-    # resp = requests.post(
-    #     '/'.join((API_URL_TILECONFIG, TILE_KEY)),
-    #     data=data_to_push)
-    # if resp.status_code != 200:
-    #     print(resp.text)
-    #     return
-
 
 
 if __name__ == '__main__':

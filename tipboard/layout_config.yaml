@@ -40,9 +40,9 @@ layout:
               classes:
 
         - col_1_of_4:
-            - tile_template: empty
-              tile_id: empty
-              title: Calendar
+            - tile_template: image
+              tile_id: cat_image
+              title: ManyThing Image
               classes:
     
     
