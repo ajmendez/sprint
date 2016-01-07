@@ -103,12 +103,12 @@ def getdata():
         df['cleancost'] = df['COST'].apply(convert)
         # df['USAGE'].groupby(df['hour']).apply(np.mean).plot()
         
-        out[tag]['hourly']      = df['cleancost'].where(df['datenum'] > before).groupby(df['hour']).apply(np.mean)
-        out[tag]['hourly_last'] = df['cleancost'].where(df['datenum'] > lastday).groupby(df['hour'].where(df['datenum'] > lastday)).apply(np.mean)
-        out[tag]['hourly_all']  = df['cleancost'].groupby(df['hour']).apply(np.mean)
+        out[tag]['hourly']      = df['cleancost'].where(df['datenum'] > before).groupby(df['hour']).apply(np.nanmean)
+        out[tag]['hourly_last'] = df['cleancost'].where(df['datenum'] > lastday).groupby(df['hour'].where(df['datenum'] > lastday)).apply(np.nanmean)
+        out[tag]['hourly_all']  = df['cleancost'].groupby(df['hour']).apply(np.nanmean)
         
         short = df.where(df['datenum'] > before)
-        out[tag]['daily']      = short['cleancost'].groupby(short['DATE']).apply(np.sum)
+        out[tag]['daily']      = short['cleancost'].groupby(short['DATE']).apply(np.nansum)
     return out
     
 
