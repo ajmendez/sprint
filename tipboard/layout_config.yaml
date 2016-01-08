@@ -22,15 +22,15 @@ layout:
     
     - row_1_of_3:
         - col_1_of_4:
-            - tile_template: empty
-              tile_id: empty
-              title: empty
+            - tile_template: big_value
+              tile_id: net_download
+              title: Network Download
               classes:
               
         - col_1_of_4:
-            - tile_template: empty
-              tile_id: empty
-              title: empty
+            - tile_template: big_value
+              tile_id: net_upload
+              title: Network Upload
               classes:
 
         - col_1_of_4:

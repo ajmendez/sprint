@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+
+from __future__ import print_function
+
+
+
+import os
+os.chdir(os.path.expanduser('/tmp/'))
+
+import sys
+import json
+import requests
+import splinter
+from datetime import datetime
+from bs4 import BeautifulSoup
+
+
+# Get your API_KEY from your settings file ('~/.tipboard/settings-local.py').
+API_HOST, API_KEY = open(os.path.expanduser('~/.limited/tipboard'), 'r').readline().strip().split(' ')
+API_URL = 'http://{}/api/v0.1/{}'.format(API_HOST, API_KEY)
+API_URL_PUSH = '/'.join((API_URL, 'push'))
+API_URL_TILECONFIG = '/'.join((API_URL, 'tileconfig'))
+
+
+
+def _update(url, **kwargs):
+    resp = requests.post(url, **kwargs)
+    if resp.status_code != 200:
+        print(resp.text)
+        print(resp.url)
+        print(kwargs)
+        sys.exit(1)
+
+def _config(tile, key, value):
+    _update('{}/{}'.format(API_URL_TILECONFIG, key), data={'value':json.dumps(value)})
+
+def _data(tile, key, **kwargs):
+    data = {
+        'tile': tile,
+        'key': key,
+        'data':json.dumps(kwargs),
+    }
+    _update(API_URL_PUSH, data=data)
+
+def niceint(string):
+    try:
+        return int(string)
+    except:
+        return string
+
+
+
+def main():
+    user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36'
+    driver = 'phantomjs'
+    user, pw = open(os.path.expanduser('~/.limited/tp')).readline().strip().split()
+    byte_names = ['wan_down_bytes', 'wan_up_bytes']
+    names = ['download', 'upload']
+    now = datetime.now()
+    
+    print('{} '.format(now), end='')
+    
+    with splinter.Browser(driver, user_agent=user_agent) as b:
+        b.visit('http://{user}:{pw}@192.168.0.1/'.format(**locals()))
+        # b.visit('http://{user}:{pw}@127.0.0.1:9999/'.format(**locals()))
+        try:
+            with b.get_iframe('mainFrame') as w:
+                soup = BeautifulSoup(w.html, 'xml')
+                tmp = soup.find(id='t_byt').parent
+                uptime = soup.find(id='activeTime').text
+                
+        except Exception as e:
+            print(e)
+            # print(soup)
+            raise
+        for name, tag, item in zip(names, byte_names,tmp.findAll('td')[1:]):
+            print('| {0:s} | {1:0.1f}'.format(name, niceint(item.text)/1e6), end='')
+            
+            tmp = {'title':'{}'.format(name.capitalize()),
+                   'description': 'Last Updated: {}'.format(now),
+                   'big-value':'{:0,.0f} MB'.format(niceint(item.text)/1e6),
+                   'upper-left-label':uptime}
+            _data('big_value', 'net_{}'.format(name), **tmp)
+    print('')
+
+
+
+if __name__ == '__main__':
+    main()
