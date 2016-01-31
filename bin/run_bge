@@ -63,10 +63,6 @@ def getdata():
     # Get Projected values
     b.visit('https://secure.bge.com/css/Pages/adaptor.aspx?pgcode=3')
     time.sleep(1)
-    for tag in ['gas','electricity']:
-        out[tag]['projected'] = 'NAN'
-        out[tag]['dates'] = 'NAN'
-        out[tag]['text'] = '{}'.format(e)
     try:
         soup = BeautifulSoup(b.find_by_xpath("//div[@class='tab-panels']").first.html, "html.parser")
         for htmltag in soup.findAll('div', attrs={'class':'meterType'}):
@@ -76,7 +72,10 @@ def getdata():
             out[tag]['dates'] = htmltag.findAll('dt', attrs={'class':'title'})[0]['data-test-current-range']
             out[tag]['text'] = tmp
     except Exception as e:
-        pass
+        for tag in ['gas','electricity']:
+            out[tag]['projected'] = 'NAN'
+            out[tag]['dates'] = 'NAN'
+            out[tag]['text'] = '{}'.format(e)
 
     
     
@@ -84,7 +83,11 @@ def getdata():
     now = datetime.now()
     delta = timedelta(days=6*31) # six months
     b.visit('https://bgesmartenergymanager.com/ei/app/myEnergyUse')
+    
+    # b.visit(b.find_by_xpath("//a[@class='greenButton']")['href'])
     b.visit(b.find_by_text('Green Button - Download my data')['href'])
+    # print(b.screenshot())
+    
     b.find_by_id('exportDialog-submitButton').click()
     url = b.find_by_xpath('//form')['action']
     # exportFormat could be "CSV_AMI_SINGLE_BILL" "CSV_AMI" and others
@@ -144,9 +147,10 @@ def getdata():
 def _update(url, **kwargs):
     resp = requests.post(url, **kwargs)
     if resp.status_code != 200:
-        print(resp.text)
-        print(resp.url)
-        print(kwargs)
+        print('Failed to update tipboard!')
+        print(resp)
+        # print(resp.url)
+        # print(kwargs)
         sys.exit(1)
 
 def _config(tile, key, value):
@@ -299,6 +303,7 @@ def main():
         
     except Exception as e:
         print('Failed: {}'.format(e))
+        raise
         
 
 
