@@ -59,17 +59,26 @@ def getdata():
     b.find_by_id('PASSWORD').fill(PASSWORD)
     b.find_by_id('loginbutton').click()
     time.sleep(1)
-    
+ 
     # Get Projected values
     b.visit('https://secure.bge.com/css/Pages/adaptor.aspx?pgcode=3')
     time.sleep(1)
-    soup = BeautifulSoup(b.find_by_xpath("//div[@class='tab-panels']").first.html, "html.parser")
-    for htmltag in soup.findAll('div', attrs={'class':'meterType'}):
-        tmp = ' '.join(htmltag.text.split())+'\n'
-        tag = 'gas' if ('natural gas' in tmp) else 'electricity'
-        out[tag]['projected'] = htmltag.findAll('div', attrs={'class':'value'})[0].text.strip().replace('therms',' therms')
-        out[tag]['dates'] = htmltag.findAll('dt', attrs={'class':'title'})[0]['data-test-current-range']
-        out[tag]['text'] = tmp
+    for tag in ['gas','electricity']:
+        out[tag]['projected'] = 'NAN'
+        out[tag]['dates'] = 'NAN'
+        out[tag]['text'] = '{}'.format(e)
+    try:
+        soup = BeautifulSoup(b.find_by_xpath("//div[@class='tab-panels']").first.html, "html.parser")
+        for htmltag in soup.findAll('div', attrs={'class':'meterType'}):
+            tmp = ' '.join(htmltag.text.split())+'\n'
+            tag = 'gas' if ('natural gas' in tmp) else 'electricity'
+            out[tag]['projected'] = htmltag.findAll('div', attrs={'class':'value'})[0].text.strip().replace('therms',' therms')
+            out[tag]['dates'] = htmltag.findAll('dt', attrs={'class':'title'})[0]['data-test-current-range']
+            out[tag]['text'] = tmp
+    except Exception as e:
+        pass
+
+    
     
     # get the data
     now = datetime.now()
