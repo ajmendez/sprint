@@ -147,11 +147,7 @@ def getdata():
 def _update(url, **kwargs):
     resp = requests.post(url, **kwargs)
     if resp.status_code != 200:
-        print('Failed to update tipboard!')
-        print(resp)
-        # print(resp.url)
-        # print(kwargs)
-        sys.exit(1)
+        raise IOError('Failed to update tipboard')
 
 def _config(tile, key, value):
     _update('{}/{}'.format(API_URL_TILECONFIG, key), data={'value':json.dumps(value)})
